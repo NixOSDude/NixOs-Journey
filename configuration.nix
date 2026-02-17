@@ -8,6 +8,8 @@
   imports =
     [ # Include the results of the hardware scan.
       ./hardware-configuration.nix
+      ./users.nix
+      ./nvidia.nix
     ];
 
   # Bootloader.
@@ -78,19 +80,17 @@
   # Enable touchpad support (enabled default in most desktopManager).
   # services.xserver.libinput.enable = true;
 
-  # Define a user account. Don't forget to set a password with ‘passwd’.
-  users.users.nixdude = {
-    isNormalUser = true;
-    description = "NixDude";
-    extraGroups = [ "networkmanager" "wheel" ];
-    packages = with pkgs; [
-      kdePackages.kate
-    #  thunderbird
-    ];
-  };
 
   # Install firefox.
   programs.firefox.enable = true;
+
+  programs.bash = {
+      interactiveShellInit = ''
+        alias nix-switch='sudo nixos-rebuild switch --flake /etc/nixos#nixos'
+        alias nix-test='sudo nixos-rebuild test --flake /etc/nixos#nixos'
+        alias nix-clean='sudo nix-collect-garbage -d'
+      '';
+  };
 
   # Allow unfree packages
   nixpkgs.config.allowUnfree = true;
@@ -125,34 +125,9 @@
   # settings for stateful data, like file locations and database versions
   # on your system were taken. It‘s perfectly fine and recommended to leave
   # this value at the release version of the first install of this system.
-  # Before changing this value read the documentation for this option
   # (e.g. man configuration.nix or on https://nixos.org/nixos/options.html).
   system.stateVersion = "25.11"; # Did you read the comment?
 
-# Enable graphics driver
-hardware.graphics.enable = true;
-
-# Load nvidia driver for Xorg and Wayland (Plasma uses Wayland)
-services.xserver.videoDrivers = ["nvidia"];
-
-hardware.nvidia = {
-  # Modesetting is required for Plasma Wayland
-  modesetting.enable = true;
-
-  # Nvidia power management. Experimental, and can cause sleep issues.
-  powerManagement.enable = false;
-  powerManagement.finegrained = false;
-
-  # Use the NVidia open source kernel module (not to be confused with nouveau)
-  # This is usually preferred for Turing and later (your 3060 is Ampere)
-  open = false;
-
-  # Enable the Nvidia settings menu
-  nvidiaSettings = true;
-
-  # Select the appropriate driver version
-  package = config.boot.kernelPackages.nvidiaPackages.stable;
-};
 
 # Enable Flakes and the new Nix command line
   nix.settings.experimental-features = [ "nix-command" "flakes" ];
@@ -165,5 +140,11 @@ hardware.nvidia = {
     nix-direnv.enable = true;
 
 };
+
+programs.bash.shellAliases = {
+    nix-switch = "sudo nixos-rebuild switch --flake /etc/nixos#nixos";
+    nix-test = "sudo nixos-rebuild test --flake /etc/nixos#nixos";
+    nix-clean = "sudo nix-collect-garbage -d";
+  };
 
 }
