@@ -1,31 +1,37 @@
 { config, pkgs, ... }:
 
 let
-  # 1. Define your Identity and Lab Logic
+  # 1. Define the Lab Identity and Logic
   myIdentity = { ... }: {
-    # Injects your Golden Ticket SSH key for passwordless access
+    networking.hostName = "nixlab";
+    
     users.users.nixos.openssh.authorizedKeys.keys = [
       "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICGBaIvAyOc9ENX7xVIT+r8Odq+tbwy3Az+l3RvKbDPr scott.baker@gmail.com"
     ];
-    
-    # Reduces hand strain: No password required for sudo commands
-    security.sudo.wheelNeedsPassword = false;
 
     # Automated Mount for the 1TB Lab Disk
-    # This looks for the label "DEll_LAB" we are about to create
     fileSystems."/mnt/lab" = {
       device = "/dev/disk/by-label/DEll_LAB";
       fsType = "ext4";
       options = [ "nofail" "rw" ];
     };
 
+    # Lab Tools pre-installed in the RAM image
+    environment.systemPackages = with pkgs; [
+      htop
+      pciutils
+      git
+      vim
+    ];
+
+    security.sudo.wheelNeedsPassword = false;
     services.openssh = {
       enable = true;
       settings.PermitRootLogin = "yes";
     };
   };
 
-  # 2. Build the Netboot image with the Identity Layer
+  # 2. Build the Netboot image
   netboot = (import <nixpkgs/nixos/lib/eval-config.nix> {
     modules = [ 
       <nixpkgs/nixos/modules/installer/netboot/netboot-minimal.nix>
@@ -33,17 +39,16 @@ let
     ];
   }).config.system.build;
 
-  # 3. Create the PXE Menu file in the Nix Store
+  # 3. Create the PXE Menu
   pxeConfigFile = pkgs.writeText "default" ''
     DEFAULT nixos
     LABEL nixos
-      SAY Booting Sovereign NixOS (Lab Mode) from Ultra 7...
+      SAY Booting nixlab (1TB Lab Mode) from Ultra 7...
       KERNEL bzImage
       APPEND initrd=initrd init=${netboot.toplevel}/init root=/dev/ram0 rw copytoram nomodeset
   '';
 in
 {
-  # Networking & TFTP Services
   services.dnsmasq = {
     enable = true;
     settings = {
@@ -55,12 +60,11 @@ in
       dhcp-boot = "pxelinux.0";
       tftp-mtu = "1468";
       
-      # Static Lease: Ensures the Dell always stays at .146
-      dhcp-host = "28:f1:0e:18:a8:20,192.168.68.146";
+      # Static Lease for the Dell
+      dhcp-host = "28:f1:0e:18:a8:20,192.168.68.146,nixlab";
     };
   };
 
-  # System Automation: Symlinking the Build to the TFTP Root
   systemd.tmpfiles.rules = [
     "d /srv/tftpboot 0755 root root -"
     "d /srv/tftpboot/pxelinux.cfg 0755 root root -"
