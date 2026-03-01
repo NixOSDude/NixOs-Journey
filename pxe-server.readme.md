@@ -28,32 +28,30 @@ Coming from 15 years of "Imperative IT" (Ubuntu, Fedora, Windows Server), the fi
 * **The Reality:** You can't debug PXE in the dark. We had to monitor the Ultra 7's logs in real-time to see if the Dell was actually "talking" to us.
 * **The Tool:** `sudo journalctl -u dnsmasq.service -f`
 * **The Evidence:** Seeing these lines confirmed the orchestration was working:
-
 > `Feb 28 18:47:24 NixOsEng dnsmasq-tftp: sent /srv/tftpboot/bzImage to 192.168.68.146`
 > `Feb 28 18:48:07 NixOsEng dnsmasq-tftp: sent /srv/tftpboot/initrd to 192.168.68.146`
 > `Feb 28 18:48:23 NixOsEng dnsmasq-dhcp: DHCPACK(enp129s0) 192.168.68.146 nixlab`
 
-This log was the "heartbeat" of the lab—proving the Dell successfully pulled its kernel and accepted its identity as `nixlab`.
-
-### **D. The LVM "Hardware Ghost" & Kernel Dissonance**
-* **The Struggle:** Even after booting, the Dell's 1TB SSD was "Busy." `mkfs.ext4` couldn't see `/dev/sda1` despite successful partitioning.
-* **The Reality:** Residual LVM/Swap signatures from the *old* OS were being auto-claimed by the Dell's kernel at boot.
-* **The Fix:** 1. **Exorcism:** `vgchange -an` to kill the Volume Groups. 
-    2. **Lobotomy:** `dmsetup remove_all` to clear the device mapper. 
-    3. **Sync-Reboot:** Orchestrated a synchronized reboot from the Ultra 7 so the fresh kernel could finally "see" the new world order.
+### **D. The LVM "Hardware Ghost" & Partitioning Pivot**
+* **The Struggle:** Even after booting, the Dell's 1TB SSD was "Busy." Residual LVM/Swap signatures from the *old* OS were being auto-claimed by the Dell's kernel, locking `/dev/sda`.
+* **The Exorcism:** 1. `vgchange -an` to kill the active Volume Groups. 
+    2. `dmsetup remove_all` to clear the device mapper. 
+* **The Persistence Fix:** We moved to a **Label-Based Persistence** model. We created a fresh GPT table with `parted` and formatted the partition with a specific label: `mkfs.ext4 -L DEll_LAB /dev/sda1`.
+* **The Integration:** We updated the `pxe-server.nix` on the Ultra 7 to include:
+> `fileSystems."/mnt/lab" = { device = "/dev/disk/by-label/DEll_LAB"; fsType = "ext4"; };`
 
 ---
 
 ## **4. The Victory: Zero-Touch Persistence**
-The Dell E5570 now lives in a state of "Functional Grace." 
-* **It boots from the air** (PXE).
-* **It lives in the RAM** (Stateless).
-* **It remembers the Lab** (Automatic 1TB SSD mount at `/mnt/lab`).
-* **It knows its Master** (Ed25519 SSH keys baked into the image).
+The Dell E5570 now lives in a state of **Functional Grace**:
+1.  **It boots from the air** (PXE) via the Ultra 7.
+2.  **It lives in the RAM** (Stateless Speed).
+3.  **It remembers the Lab** (Automatic 1TB SSD mount via disk-label orchestration).
+4.  **It knows its Master** (Ed25519 SSH keys baked into the image).
 
 ---
 
 ## **5. Engineering Resources for the "Ground Up" Journey**
-* **The Boot Sequence:** [nixos/modules/system/boot/stage-1.nix](https://github.com/NixOS/nixpkgs/blob/master/nixos/modules/system/boot/stage-1.nix) (Source code of the initrd process).
+* **The Boot Sequence:** [nixos/modules/system/boot/stage-1.nix](https://github.com/NixOS/nixpkgs/blob/master/nixos/modules/system/boot/stage-1.nix)
 * **Tmpfiles Logic:** `man configuration.nix` (Search for `systemd.tmpfiles.rules`).
 * **Netboot Logic:** [Nixpkgs GitHub: nixos/modules/installer/netboot](https://github.com/NixOS/nixpkgs/tree/master/nixos/modules/installer/netboot).
