@@ -1,23 +1,34 @@
-# 🛠️ Battle Log: PXE Orchestration & Stateless Lab
+# 🛠️ Battle Log: The PXE "Stage 1" Trench War
 
-### **The Objective**
-Establish a stateless, network-booted (PXE) worker node using a Dell E5570 ("nixlab"), served entirely by the Ultra 7 control plane.
+## **1. The Objective: Sovereignty via the Wire**
+The mission was deceptively simple: Turn the **Ultra 7 (NixOsEng)** into a high-performance Control Plane that serves a 100% functional, stateless NixOS environment to a **Dell Latitude E5570 (nixlab)** over the network. No USB sticks, no local SSD OS, no manual intervention.
 
-### **The Hurdles**
+## **2. The Reality Check: NixOS is Not a Distro, It’s a Compiler**
+Coming from 15 years of "Imperative IT" (Ubuntu, Fedora, Windows Server), the first hurdle wasn't technical—it was mental. In those worlds, you `sudo nano` a file, you `chmod` a directory, and you "fix" things. In NixOS, those habits are "Anti-Patterns."
 
-#### 1. The LVM "Busy" Lock
-* **The Struggle:** Attempting to format the internal 1TB drive for lab storage resulted in `Device or resource busy`. 
-* **The Reality:** Residual LVM and Swap signatures from a previous OS were automatically claimed by the kernel at boot, locking the hardware.
-* **The Fix:** Forcibly deactivating Volume Groups (`vgchange -an`) and clearing device mapper nodes (`dmsetup remove_all`) to release the kernel's grip.
+> **The Epiphany:** If you didn't define it in the `.nix` expression on the Ultra 7, it doesn't exist on the Dell. Period.
 
-#### 2. Kernel Cognitive Dissonance
-* **The Struggle:** `parted` successfully wrote a new GPT table, but `mkfs.ext4` claimed the device `/dev/sda1` did not exist.
-* **The Reality:** The kernel was protecting its active memory map of the disk. Since the device was "busy" during the initial partitioning, the `ioctl` to refresh the table failed.
-* **The Fix:** Orchestrated a synchronized reboot where the Ultra 7 served a fresh image containing the `fileSystems` logic, forcing the Dell's kernel to re-scan the hardware on wake.
+---
 
-#### 3. Identity Injection
-* **The Struggle:** Eliminating manual friction (passwords) for a remote, headless node.
-* **The Victory:** Injected Ed25519 SSH keys and `wheelNeedsPassword = false` directly into the `netboot-minimal` derivation.
+## **3. The Hurdles: Engineering the Bridge**
 
-### **The Result**
-A "Zero-Touch" lab node. The Dell boots into RAM, identifies as `nixlab`, and automatically mounts a 916GB persistent storage block at `/mnt/lab` based on the disk label `DEll_LAB`.
+### **A. The "Stage 1" /mnt-root Death Loop**
+* **The Struggle:** The Dell would catch the PXE signal, download the kernel, start the boot sequence... and then scream `/mnt-root` error before kernel-panicking. 
+* **The Reality:** This is the "Nix Gatekeeper." The kernel was alive, but it couldn't find its "Brain" (the Nix Store). In a traditional netboot, the kernel expects to find a root filesystem on a disk.
+* **The Fix:** We had to move the entire OS into the RAM. We refactored `pxe-server.nix` to build a **SquashFS** image containing the full system closure. By adding `boot.kernelParams = [ "copytoram" ];`, we forced the Dell to pull the entire Nix Store into its 24GB of RAM during Stage 1.
+
+### **B. The `L+` Symlink Nightmare (Orchestrating `dnsmasq`)**
+* **The Struggle:** `dnsmasq` kept reporting "File Not Found." We tried to treat `/srv/tftpboot` like a normal folder, but Nix kept wiping our changes or pointing to empty space.
+* **The Reality:** NixOS is **Declarative**. You cannot manually "administer" a TFTP directory when the source files are immutable hashes that change every time you tweak the code.
+* **The Fix:** We mastered `systemd.tmpfiles.rules` using the **`L+` (Link Plus)** argument.
+    * **The Logic:** `L+ /srv/tftpboot/bzImage - - - - ${netboot.kernel}/bzImage`
+    * The `+` is the "Hammer." It tells NixOS to overwrite any existing junk and force a dynamic bridge between the static PXE firmware and the ever-changing Nix Store.
+
+### **C. Live Monitoring: Watching the Handshake**
+* **The Reality:** You can't debug PXE in the dark. We had to monitor the Ultra 7's logs in real-time to see if the Dell was actually "talking" to us.
+* **The Tool:** `sudo journalctl -u dnsmasq.service -f`
+* **The Evidence:** Seeing these lines confirmed the orchestration was working:
+  ```text
+  Feb 28 18:47:24 NixOsEng dnsmasq-tftp: sent /srv/tftpboot/bzImage to 192.168.68.146
+  Feb 28 18:48:07 NixOsEng dnsmasq-tftp: sent /srv/tftpboot/initrd to 192.168.68.146
+  Feb 28 18:48:23 NixOsEng dnsmasq-dhcp: DHCPACK(enp129s0) 192.168.68.146 nixlab
