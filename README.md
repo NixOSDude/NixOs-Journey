@@ -13,7 +13,7 @@ This is an independent deep-dive into the Nix ecosystem—moving beyond standard
 ## 📂 The Battle Logs
 Each entry below represents a successfully navigated architectural hurdle. These are the technical post-mortems of system implementation:
 
-* **[PXE Orchestration & Stateless Lab Deployment](./pxe-server.md)**
+* **[PXE Orchestration & Stateless Lab Deployment](./pxe-server.readme.md)**
     * Deployment of a diskless worker node (Dell E5570) via the Ultra 7.
     * Overcoming kernel/LVM hardware locks and achieving automated storage persistence in a RAM-only environment.
 
