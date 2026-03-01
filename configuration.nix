@@ -1,7 +1,7 @@
 { config, pkgs, lib, ... }:
 
 {
-  imports = [    
+  imports = [     
     ./hardware-configuration.nix
     ./users.nix
     ./nvidia.nix
@@ -10,8 +10,6 @@
 
   boot.loader.systemd-boot.enable = true;
   boot.loader.efi.canTouchEfiVariables = true;
-
-  networking.networkmanager.enable = true;
 
   time.timeZone = "America/Phoenix";
   i18n.defaultLocale = "en_US.UTF-8";
@@ -35,6 +33,7 @@
   # --- Sovereign Node Environment ---
   nixpkgs.config.allowUnfree = true;
   nix.settings.auto-optimise-store = true;
+  nix.settings.experimental-features = [ "nix-command" "flakes" ];
 
   environment.systemPackages = with pkgs; [
     git
@@ -66,9 +65,31 @@
     nix-direnv.enable = true;
   };
 
+  networking = {
+    hostName = "NixOsEng";
+    networkmanager.enable = false;
+    useDHCP = false;
+
+    firewall = {
+      enable = true;
+      allowedTCPPorts = [ 22 80 443 9000 ];
+      allowedUDPPorts = [ 9001 ];
+    };
+
+    interfaces.enp129s0.ipv4.addresses = [
+      {
+        address = "192.168.0.53";
+        prefixLength = 22;
+      }
+      {
+        address = "192.168.68.50";
+        prefixLength = 24;
+      }
+    ];
+    
+    defaultGateway = "192.168.0.1";
+    nameservers = [ "1.1.1.1" "8.8.8.8" ];
+  };
+
   system.stateVersion = "25.11";
-  networking.hostName = "NixOsEng";
-  networking.firewall.allowedTCPPorts = [ 22 80 443 9000 ];
-  networking.firewall.allowedUDPPorts = [ 9001 ];
-  nix.settings.experimental-features = [ "nix-command" "flakes" ];
 }
