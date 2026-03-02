@@ -1,7 +1,7 @@
 { config, pkgs, ... }:
 
 let
-  # Placeholder derivation for our future Haskell-based Skellinux/LambdaOS kernel.
+  # Placeholder derivation for our future Haskell-based LambdaOS kernel.
   lambdaOsKernel = pkgs.writeText "lambdaos.bin" "PURE_FP_KERNEL_PLACEHOLDER";
 
   # 1. Create the PXE Menu with ONLY LambdaOS
@@ -11,7 +11,7 @@ let
     TIMEOUT 10
 
     LABEL lambdaos
-      MENU LABEL Boot LambdaOS (Pure FP Skellinux Kernel)
+      MENU LABEL Boot LambdaOS (Pure FP Sovereign Machine)
       KERNEL mboot.c32
       APPEND lambdaos.bin
   '';
@@ -31,7 +31,7 @@ in
     };
   };
 
-  # 2. Stage strictly the syslinux bootloaders, dependencies, and the LambdaOS kernel
+  # 2. Stage strictly the bootloaders, dependencies, and the LambdaOS kernel
   systemd.tmpfiles.rules = [
     "d /srv/tftpboot 0755 root root -"
     "d /srv/tftpboot/pxelinux.cfg 0755 root root -"
