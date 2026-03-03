@@ -1,10 +1,16 @@
 { config, pkgs, ... }:
 
 let
-  # Placeholder derivation for our future Haskell-based LambdaOS kernel.
-  lambdaOsKernel = pkgs.writeText "lambdaos.bin" "PURE_FP_KERNEL_PLACEHOLDER";
+  # ---------------------------------------------------------------------------
+  # LambdaOS Kernel Source
+  # ---------------------------------------------------------------------------
+  # We are pulling the compiled 64-bit ELF binary directly from our local 
+  # build directory. Nix will copy this into the immutable Nix store.
+  lambdaOsKernel = /home/nixdude/LambdaOS/build/lambdaos.bin;
 
-  # 1. Create the PXE Menu with ONLY LambdaOS
+  # ---------------------------------------------------------------------------
+  # PXE Boot Menu Configuration
+  # ---------------------------------------------------------------------------
   pxeConfigFile = pkgs.writeText "default" ''
     DEFAULT lambdaos
     PROMPT 0
@@ -17,6 +23,9 @@ let
   '';
 in
 {
+  # ---------------------------------------------------------------------------
+  # DNSMasq / TFTP Configuration
+  # ---------------------------------------------------------------------------
   services.dnsmasq = {
     enable = true;
     settings = {
@@ -27,19 +36,26 @@ in
       dhcp-range = "192.168.68.100,192.168.68.200,12h";
       dhcp-boot = "pxelinux.0";
       tftp-mtu = "1468";
-      dhcp-host = "28:f1:0e:18:a8:20,192.168.68.146,lambdaos"; 
+      # Dell Test PC MAC Address mapping
+      dhcp-host = "28:f1:0e:18:a8:20,192.168.68.146,lambdaos";  
     };
   };
 
-  # 2. Stage strictly the bootloaders, dependencies, and the LambdaOS kernel
+  # ---------------------------------------------------------------------------
+  # TFTP Directory Staging
+  # ---------------------------------------------------------------------------
   systemd.tmpfiles.rules = [
     "d /srv/tftpboot 0755 root root -"
     "d /srv/tftpboot/pxelinux.cfg 0755 root root -"
+    
+    # Syslinux Dependencies
     "L+ /srv/tftpboot/pxelinux.0 - - - - ${pkgs.syslinux}/share/syslinux/pxelinux.0"
     "L+ /srv/tftpboot/ldlinux.c32 - - - - ${pkgs.syslinux}/share/syslinux/ldlinux.c32"
     "L+ /srv/tftpboot/mboot.c32 - - - - ${pkgs.syslinux}/share/syslinux/mboot.c32"
     "L+ /srv/tftpboot/libcom32.c32 - - - - ${pkgs.syslinux}/share/syslinux/libcom32.c32"
     "L+ /srv/tftpboot/libutil.c32 - - - - ${pkgs.syslinux}/share/syslinux/libutil.c32"
+    
+    # LambdaOS Immutable Artifacts
     "L+ /srv/tftpboot/lambdaos.bin - - - - ${lambdaOsKernel}"
     "L+ /srv/tftpboot/pxelinux.cfg/default - - - - ${pxeConfigFile}"
   ];
